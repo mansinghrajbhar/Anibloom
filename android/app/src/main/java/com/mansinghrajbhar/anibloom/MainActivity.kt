@@ -117,10 +117,6 @@ fun AnibloomApp() {
                 Dock(page) { page = it }
             }
 
-            // The previous version placed the Island inside the status-bar
-            // touch area. On the Edge 50 Fusion that can make the pill look
-            // present but not receive taps. Put it below the system inset so
-            // the entire pill is reliably touchable.
             Island(
                 expanded = islandExpanded,
                 onExpandedChange = { islandExpanded = it },
@@ -138,6 +134,7 @@ private fun Island(
     onExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val width by animateDpAsState(
         targetValue = if (expanded) 336.dp else 156.dp,
         animationSpec = spring(dampingRatio = 0.68f, stiffness = 380f),
@@ -185,9 +182,9 @@ private fun Island(
                     exit = shrinkVertically() + fadeOut()
                 ) {
                     Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        IslandButton("⏮") { mediaKey(LocalContext.current, KeyEvent.KEYCODE_MEDIA_PREVIOUS) }
-                        IslandButton("▶") { mediaKey(LocalContext.current, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) }
-                        IslandButton("⏭") { mediaKey(LocalContext.current, KeyEvent.KEYCODE_MEDIA_NEXT) }
+                        IslandButton("⏮") { mediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS) }
+                        IslandButton("▶") { mediaKey(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) }
+                        IslandButton("⏭") { mediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT) }
                     }
                 }
             }
