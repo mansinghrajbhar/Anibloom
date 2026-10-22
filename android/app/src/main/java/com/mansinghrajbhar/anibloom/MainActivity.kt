@@ -16,22 +16,31 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -62,6 +71,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -95,7 +105,7 @@ fun AnibloomApp() {
             ) {
                 AnimatedContent(targetState = page, label = "page") { current ->
                     when (current) {
-                        "Home" -> HomePage(onIsland = { islandExpanded = true })
+                        "Home" -> HomePage { islandExpanded = true }
                         "Music" -> MusicPage()
                         "Controls" -> ControlsPage()
                         "Calendar" -> CalendarPage()
@@ -106,43 +116,107 @@ fun AnibloomApp() {
                 Dock(page) { page = it }
             }
 
+            // Keep the Island below the system status-bar touch region. The
+            // previous version placed it at y=2dp, which could put the click
+            // target underneath Android's status bar on the Edge 50 Fusion.
             Island(
                 expanded = islandExpanded,
-                onClick = { islandExpanded = !islandExpanded },
-                modifier = Modifier.align(Alignment.TopCenter)
+                onExpandedChange = { islandExpanded = it },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .windowInsetsPadding(WindowInsets.statusBars)
             )
         }
     }
 }
 
 @Composable
-private fun Island(expanded: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val width by animateDpAsState(if (expanded) 330.dp else 150.dp, spring(dampingRatio = .72f, stiffness = 420f), label = "islandWidth")
-    val height by animateDpAsState(if (expanded) 88.dp else 38.dp, spring(dampingRatio = .72f, stiffness = 420f), label = "islandHeight")
+private fun Island(
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val width by animateDpAsState(
+        targetValue = if (expanded) 336.dp else 156.dp,
+        animationSpec = spring(dampingRatio = 0.68f, stiffness = 380f),
+        label = "islandWidth"
+    )
+    val height by animateDpAsState(
+        targetValue = if (expanded) 108.dp else 42.dp,
+        animationSpec = spring(dampingRatio = 0.68f, stiffness = 380f),
+        label = "islandHeight"
+    )
+
     Box(
-        modifier.padding(top = 2.dp).width(width).height(height)
-            .clip(RoundedCornerShape(24.dp)).background(Color.Black).clickable { onClick() },
+        modifier = modifier
+            .padding(top = 4.dp)
+            .width(width)
+            .height(height)
+            .clip(RoundedCornerShape(28.dp))
+            .background(Color.Black)
+            .clickable { onExpandedChange(!expanded) }
+            .pointerInput(Unit) {
+                detectVerticalDragGestures { _, dragAmount ->
+                    if (dragAmount > 10f) onExpandedChange(true)
+                    if (dragAmount < -10f) onExpandedChange(false)
+                }
+            }
+            .padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center
     ) {
         if (expanded) {
-            Row(Modifier.padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(46.dp).clip(RoundedCornerShape(13.dp)).background(Card2), Alignment.Center) {
-                    Icon(Icons.Rounded.MusicNote, null, tint = Accent)
+            Column(Modifier.fillMaxWidth()) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        Modifier.size(44.dp).clip(RoundedCornerShape(13.dp)).background(Card2),
+                        Alignment.Center
+                    ) {
+                        Icon(Icons.Rounded.MusicNote, null, tint = Accent)
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Anibloom Island", color = Accent, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("Now ready · tap to collapse", color = Muted, fontSize = 11.sp)
+                    }
+                    Text("×", color = Accent, fontSize = 24.sp, modifier = Modifier.clickable { onExpandedChange(false) })
                 }
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("Anibloom Island", color = Accent, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    Text("Tap for music controls", color = Muted, fontSize = 11.sp)
+                AnimatedVisibility(
+                    visible = expanded,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        IslandButton("⏮") { mediaKey(LocalContext.current, KeyEvent.KEYCODE_MEDIA_PREVIOUS) }
+                        IslandButton("▶") { mediaKey(LocalContext.current, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) }
+                        IslandButton("⏭") { mediaKey(LocalContext.current, KeyEvent.KEYCODE_MEDIA_NEXT) }
+                    }
                 }
-                Text("×", color = Accent, fontSize = 22.sp)
             }
         } else {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                Box(Modifier.size(6.dp).clip(CircleShape).background(Accent))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                Box(Modifier.size(7.dp).clip(CircleShape).background(Accent))
                 Text("Anibloom", color = Accent, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                Text("⌄", color = Muted, fontSize = 14.sp)
             }
         }
     }
+}
+
+@Composable
+private fun IslandButton(text: String, onClick: () -> Unit) {
+    Box(
+        Modifier.weight(1f).height(30.dp).clip(RoundedCornerShape(12.dp)).background(Card2).clickable { onClick() },
+        Alignment.Center
+    ) { Text(text, color = Accent, fontSize = 13.sp) }
 }
 
 @Composable
@@ -160,7 +234,7 @@ private fun HomePage(onIsland: () -> Unit) {
             }
         }
         Spacer(Modifier.height(12.dp))
-        ActionCard("Anibloom Island", "Tap to expand", Icons.Rounded.AutoAwesome, Modifier.fillMaxWidth(), onIsland)
+        ActionCard("Anibloom Island", "Tap here or swipe down to expand", Icons.Rounded.AutoAwesome, Modifier.fillMaxWidth(), onIsland)
     }
 }
 
@@ -254,15 +328,15 @@ private fun SettingsPage() {
     val context = LocalContext.current
     Column(Modifier.fillMaxWidth()) {
         Text("Settings", color = Accent, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        Text("Configure Anibloom Android", color = Muted, fontSize = 12.sp)
+        Text("Private Android configuration", color = Muted, fontSize = 12.sp)
         Spacer(Modifier.height(14.dp))
         ActionCard("Display", "Punch-hole optimized", Icons.Rounded.AutoAwesome, Modifier.fillMaxWidth()) { open(context, Settings.ACTION_DISPLAY_SETTINGS) }
         Spacer(Modifier.height(10.dp))
-        ActionCard("Overlay", "Allow Anibloom over other apps", Icons.Rounded.AutoAwesome, Modifier.fillMaxWidth()) { open(context, Settings.ACTION_MANAGE_OVERLAY_PERMISSION, "package:${context.packageName}") }
+        ActionCard("Overlay", "Allow Island over other apps", Icons.Rounded.AutoAwesome, Modifier.fillMaxWidth()) { open(context, Settings.ACTION_MANAGE_OVERLAY_PERMISSION, "package:${context.packageName}") }
         Spacer(Modifier.height(10.dp))
-        ActionCard("Notifications", "Open Anibloom notification settings", Icons.Rounded.Notifications, Modifier.fillMaxWidth()) { open(context, Settings.ACTION_APP_NOTIFICATION_SETTINGS) }
+        ActionCard("Notifications", "Android notification settings", Icons.Rounded.Notifications, Modifier.fillMaxWidth()) { open(context, Settings.ACTION_APP_NOTIFICATION_SETTINGS) }
         Spacer(Modifier.height(10.dp))
-        ActionCard("App info", "Permissions and battery settings", Icons.Rounded.Settings, Modifier.fillMaxWidth()) { open(context, Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${context.packageName}") }
+        ActionCard("Privacy", "No analytics or tracking SDKs", Icons.Rounded.Settings, Modifier.fillMaxWidth()) { open(context, Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${context.packageName}") }
     }
 }
 
@@ -325,8 +399,7 @@ private fun rememberBattery(context: Context): Int {
                 level = (value * 100 / scale).coerceIn(0, 100)
             }
         }
-        val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
-        context.registerReceiver(receiver, filter)
+        context.registerReceiver(receiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         onDispose { context.unregisterReceiver(receiver) }
     }
     return level
@@ -351,7 +424,9 @@ private fun mediaKey(context: Context, code: Int) {
 private fun torch(context: Context, enabled: Boolean) {
     try {
         val manager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-        val id = manager.cameraIdList.firstOrNull { manager.getCameraCharacteristics(it).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true }
+        val id = manager.cameraIdList.firstOrNull {
+            manager.getCameraCharacteristics(it).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+        }
         if (id != null) manager.setTorchMode(id, enabled)
     } catch (_: Exception) { }
 }
