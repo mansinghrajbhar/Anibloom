@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -116,9 +117,10 @@ fun AnibloomApp() {
                 Dock(page) { page = it }
             }
 
-            // Keep the Island below the system status-bar touch region. The
-            // previous version placed it at y=2dp, which could put the click
-            // target underneath Android's status bar on the Edge 50 Fusion.
+            // The previous version placed the Island inside the status-bar
+            // touch area. On the Edge 50 Fusion that can make the pill look
+            // present but not receive taps. Put it below the system inset so
+            // the entire pill is reliably touchable.
             Island(
                 expanded = islandExpanded,
                 onExpandedChange = { islandExpanded = it },
@@ -166,14 +168,8 @@ private fun Island(
     ) {
         if (expanded) {
             Column(Modifier.fillMaxWidth()) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        Modifier.size(44.dp).clip(RoundedCornerShape(13.dp)).background(Card2),
-                        Alignment.Center
-                    ) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(44.dp).clip(RoundedCornerShape(13.dp)).background(Card2), Alignment.Center) {
                         Icon(Icons.Rounded.MusicNote, null, tint = Accent)
                     }
                     Spacer(Modifier.width(10.dp))
@@ -188,10 +184,7 @@ private fun Island(
                     enter = expandVertically() + fadeIn(),
                     exit = shrinkVertically() + fadeOut()
                 ) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                    Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         IslandButton("⏮") { mediaKey(LocalContext.current, KeyEvent.KEYCODE_MEDIA_PREVIOUS) }
                         IslandButton("▶") { mediaKey(LocalContext.current, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) }
                         IslandButton("⏭") { mediaKey(LocalContext.current, KeyEvent.KEYCODE_MEDIA_NEXT) }
@@ -199,10 +192,7 @@ private fun Island(
                 }
             }
         } else {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(7.dp)
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 Box(Modifier.size(7.dp).clip(CircleShape).background(Accent))
                 Text("Anibloom", color = Accent, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                 Text("⌄", color = Muted, fontSize = 14.sp)
@@ -212,7 +202,7 @@ private fun Island(
 }
 
 @Composable
-private fun IslandButton(text: String, onClick: () -> Unit) {
+private fun RowScope.IslandButton(text: String, onClick: () -> Unit) {
     Box(
         Modifier.weight(1f).height(30.dp).clip(RoundedCornerShape(12.dp)).background(Card2).clickable { onClick() },
         Alignment.Center
@@ -229,9 +219,7 @@ private fun HomePage(onIsland: () -> Unit) {
         Spacer(Modifier.height(22.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ActionCard("Battery", "$battery%", Icons.Rounded.BatteryFull, Modifier.weight(1f)) { }
-            ActionCard("Display", "Punch-hole", Icons.Rounded.Brightness6, Modifier.weight(1f)) {
-                open(context, Settings.ACTION_DISPLAY_SETTINGS)
-            }
+            ActionCard("Display", "Punch-hole", Icons.Rounded.Brightness6, Modifier.weight(1f)) { open(context, Settings.ACTION_DISPLAY_SETTINGS) }
         }
         Spacer(Modifier.height(12.dp))
         ActionCard("Anibloom Island", "Tap here or swipe down to expand", Icons.Rounded.AutoAwesome, Modifier.fillMaxWidth(), onIsland)
@@ -254,10 +242,7 @@ private fun MusicPage() {
         Spacer(Modifier.height(20.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             BigButton("⏮") { mediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS) }
-            BigButton(if (playing) "⏸" else "▶") {
-                mediaKey(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
-                playing = !playing
-            }
+            BigButton(if (playing) "⏸" else "▶") { mediaKey(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE); playing = !playing }
             BigButton("⏭") { mediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT) }
         }
     }
@@ -278,17 +263,12 @@ private fun ControlsPage() {
         }
         Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            ActionTile("Flashlight", Icons.Rounded.FlashOn, Modifier.weight(1f), flash) {
-                flash = !flash
-                torch(context, flash)
-            }
+            ActionTile("Flashlight", Icons.Rounded.FlashOn, Modifier.weight(1f), flash) { flash = !flash; torch(context, flash) }
             ActionTile("Brightness", Icons.Rounded.Brightness6, Modifier.weight(1f), bright) {
                 if (Settings.System.canWrite(context)) {
                     bright = !bright
                     Settings.System.putInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS, if (bright) 255 else 70)
-                } else {
-                    open(context, Settings.ACTION_MANAGE_WRITE_SETTINGS, "package:${context.packageName}")
-                }
+                } else open(context, Settings.ACTION_MANAGE_WRITE_SETTINGS, "package:${context.packageName}")
             }
         }
         Spacer(Modifier.height(10.dp))
@@ -304,10 +284,7 @@ private fun CalendarPage() {
     var seconds by remember { mutableStateOf(1500) }
     var running by remember { mutableStateOf(false) }
     LaunchedEffect(running) {
-        while (running && seconds > 0) {
-            delay(1000)
-            seconds--
-        }
+        while (running && seconds > 0) { delay(1000); seconds-- }
         if (seconds == 0) running = false
     }
     Column(Modifier.fillMaxWidth()) {
@@ -371,19 +348,11 @@ private fun BigButton(text: String, onClick: () -> Unit) {
 
 @Composable
 private fun Dock(selected: String, onSelect: (String) -> Unit) {
-    val items = listOf(
-        "Home" to Icons.Rounded.Home,
-        "Music" to Icons.Rounded.MusicNote,
-        "Controls" to Icons.Rounded.Brightness6,
-        "Calendar" to Icons.Rounded.CalendarMonth,
-        "Settings" to Icons.Rounded.Settings
-    )
+    val items = listOf("Home" to Icons.Rounded.Home, "Music" to Icons.Rounded.MusicNote, "Controls" to Icons.Rounded.Brightness6, "Calendar" to Icons.Rounded.CalendarMonth, "Settings" to Icons.Rounded.Settings)
     Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(vertical = 12.dp).clip(RoundedCornerShape(28.dp)).background(Card).padding(8.dp), Arrangement.SpaceEvenly, Alignment.CenterVertically) {
         items.forEach { (name, icon) ->
             val active = selected == name
-            Box(Modifier.size(48.dp).clip(CircleShape).background(if (active) Card2 else Color.Transparent).clickable { onSelect(name) }, Alignment.Center) {
-                Icon(icon, name, tint = if (active) Accent else Muted)
-            }
+            Box(Modifier.size(48.dp).clip(CircleShape).background(if (active) Card2 else Color.Transparent).clickable { onSelect(name) }, Alignment.Center) { Icon(icon, name, tint = if (active) Accent else Muted) }
         }
     }
 }
@@ -424,9 +393,7 @@ private fun mediaKey(context: Context, code: Int) {
 private fun torch(context: Context, enabled: Boolean) {
     try {
         val manager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-        val id = manager.cameraIdList.firstOrNull {
-            manager.getCameraCharacteristics(it).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
-        }
+        val id = manager.cameraIdList.firstOrNull { manager.getCameraCharacteristics(it).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true }
         if (id != null) manager.setTorchMode(id, enabled)
     } catch (_: Exception) { }
 }
