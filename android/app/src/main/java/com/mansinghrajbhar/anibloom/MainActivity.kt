@@ -5,7 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,7 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -34,7 +34,6 @@ import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,7 +43,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -73,14 +71,16 @@ fun AnibloomApp() {
 
     Surface(modifier = Modifier.fillMaxSize(), color = Bg) {
         Box(modifier = Modifier.fillMaxSize()) {
+            // Motorola Edge 50 Fusion has a centered punch-hole camera.
+            // The black Island is intentionally placed at the very top so the
+            // physical camera blends into it instead of being covered by UI.
             Column(
-                modifier = Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 18.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 18.dp)
+                    .padding(top = 108.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Spacer(Modifier.height(8.dp))
-                Island(expanded = islandExpanded, onClick = { islandExpanded = !islandExpanded })
-                Spacer(Modifier.height(24.dp))
-
                 AnimatedContent(targetState = page, label = "page") { current ->
                     when (current) {
                         "Home" -> HomePage()
@@ -93,22 +93,54 @@ fun AnibloomApp() {
                 Spacer(Modifier.weight(1f))
                 Dock(selected = page, onSelect = { page = it })
             }
+
+            // Punch-hole Dynamic Island. It remains independent of the page
+            // content and can later be moved into a system overlay service.
+            Island(
+                expanded = islandExpanded,
+                onClick = { islandExpanded = !islandExpanded },
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
     }
 }
 
 @Composable
-private fun Island(expanded: Boolean, onClick: () -> Unit) {
-    val width by animateFloatAsState(if (expanded) 0.72f else 0.42f, spring(), label = "islandWidth")
+private fun Island(expanded: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val width by animateDpAsState(
+        targetValue = if (expanded) 320.dp else 132.dp,
+        animationSpec = spring(dampingRatio = 0.72f, stiffness = 420f),
+        label = "islandWidth"
+    )
+    val height by animateDpAsState(
+        targetValue = if (expanded) 88.dp else 34.dp,
+        animationSpec = spring(dampingRatio = 0.72f, stiffness = 420f),
+        label = "islandHeight"
+    )
+
     Box(
-        modifier = Modifier.fillMaxWidth(width).height(if (expanded) 92.dp else 38.dp)
-            .clip(RoundedCornerShape(28.dp)).background(Color.Black).clickable { onClick() }
-            .padding(horizontal = 14.dp),
+        modifier = modifier
+            .padding(top = 6.dp)
+            .width(width)
+            .height(height)
+            .clip(RoundedCornerShape(24.dp))
+            .background(Color.Black)
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center
     ) {
         if (expanded) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Box(Modifier.size(50.dp).clip(RoundedCornerShape(14.dp)).background(Card2), contentAlignment = Alignment.Center) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    Modifier
+                        .size(46.dp)
+                        .clip(RoundedCornerShape(13.dp))
+                        .background(Card2),
+                    contentAlignment = Alignment.Center
+                ) {
                     Icon(Icons.Rounded.MusicNote, null, tint = Accent)
                 }
                 Column(Modifier.weight(1f)) {
@@ -118,8 +150,11 @@ private fun Island(expanded: Boolean, onClick: () -> Unit) {
                 Text("▶", color = Accent, fontSize = 18.sp)
             }
         } else {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.size(7.dp).clip(CircleShape).background(Accent))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                Box(Modifier.size(6.dp).clip(CircleShape).background(Accent))
                 Text("Anibloom", color = Accent, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
             }
         }
@@ -130,11 +165,11 @@ private fun Island(expanded: Boolean, onClick: () -> Unit) {
 private fun HomePage() {
     Column(Modifier.fillMaxWidth()) {
         Text("Good evening", color = Muted, fontSize = 14.sp)
-        Text("Your desktop, alive.", color = Accent, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Text("Your Android, alive.", color = Accent, fontSize = 28.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(22.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             InfoCard("Battery", "87%", Icons.Rounded.BatteryFull, Modifier.weight(1f))
-            InfoCard("Weather", "24°", Icons.Rounded.Brightness6, Modifier.weight(1f))
+            InfoCard("Display", "Punch-hole", Icons.Rounded.Brightness6, Modifier.weight(1f))
         }
         Spacer(Modifier.height(12.dp))
         InfoCard("Today", "Focus · Pomodoro ready", Icons.Rounded.CalendarMonth, Modifier.fillMaxWidth())
@@ -151,7 +186,7 @@ private fun MusicPage() {
         }
         Spacer(Modifier.height(18.dp))
         Text("Nothing playing", color = Accent, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Text("MediaSession integration is ready for the next port phase", color = Muted, fontSize = 12.sp)
+        Text("Media controls will use Android MediaSession", color = Muted, fontSize = 12.sp)
     }
 }
 
@@ -186,7 +221,7 @@ private fun SettingsPage() {
     Column(Modifier.fillMaxWidth()) {
         Text("Settings", color = Accent, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(14.dp))
-        InfoCard("Island", "Size, animation and behavior", Icons.Rounded.MusicNote, Modifier.fillMaxWidth())
+        InfoCard("Island", "Punch-hole · size · animation", Icons.Rounded.MusicNote, Modifier.fillMaxWidth())
         Spacer(Modifier.height(10.dp))
         InfoCard("Android permissions", "Overlay · notifications · media", Icons.Rounded.Settings, Modifier.fillMaxWidth())
     }
@@ -226,16 +261,25 @@ private fun Dock(selected: String, onSelect: (String) -> Unit) {
         "Settings" to Icons.Rounded.Settings
     )
     Row(
-        modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(vertical = 12.dp)
-            .clip(RoundedCornerShape(28.dp)).background(Card).padding(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(vertical = 12.dp)
+            .clip(RoundedCornerShape(28.dp))
+            .background(Card)
+            .padding(8.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
         items.forEach { (name, icon) ->
             val active = selected == name
             Box(
-                Modifier.size(48.dp).clip(CircleShape).background(if (active) Card2 else Color.Transparent)
-                    .clickable { onSelect(name) }, contentAlignment = Alignment.Center
+                Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(if (active) Card2 else Color.Transparent)
+                    .clickable { onSelect(name) },
+                contentAlignment = Alignment.Center
             ) { Icon(icon, name, tint = if (active) Accent else Muted) }
         }
     }
