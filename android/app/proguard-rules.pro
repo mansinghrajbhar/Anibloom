@@ -1,0 +1,1 @@
+# Anibloom Android release rules.
