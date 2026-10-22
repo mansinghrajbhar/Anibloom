@@ -1,6 +1,17 @@
 package com.mansinghrajbhar.anibloom
 
+import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
+import android.media.AudioManager
+import android.os.BatteryManager
 import android.os.Bundle
+import android.provider.Settings
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -24,6 +35,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BatteryFull
 import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material.icons.rounded.Brightness6
@@ -31,12 +43,16 @@ import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.FlashOn
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,9 +62,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,8 +78,8 @@ class MainActivity : ComponentActivity() {
 
 private val Bg = Color(0xFF09090B)
 private val Card = Color(0xFF17171A)
-private val Card2 = Color(0xFF202024)
-private val Accent = Color(0xFFE7E7EA)
+private val Card2 = Color(0xFF27272B)
+private val Accent = Color(0xFFF0F0F3)
 private val Muted = Color(0xFF9B9BA3)
 
 @Composable
@@ -69,21 +87,15 @@ fun AnibloomApp() {
     var page by remember { mutableStateOf("Home") }
     var islandExpanded by remember { mutableStateOf(false) }
 
-    Surface(modifier = Modifier.fillMaxSize(), color = Bg) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            // Motorola Edge 50 Fusion has a centered punch-hole camera.
-            // The black Island is intentionally placed at the very top so the
-            // physical camera blends into it instead of being covered by UI.
+    Surface(Modifier.fillMaxSize(), color = Bg) {
+        Box(Modifier.fillMaxSize()) {
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 18.dp)
-                    .padding(top = 108.dp),
+                Modifier.fillMaxSize().padding(horizontal = 18.dp).padding(top = 92.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 AnimatedContent(targetState = page, label = "page") { current ->
                     when (current) {
-                        "Home" -> HomePage()
+                        "Home" -> HomePage(onIsland = { islandExpanded = true })
                         "Music" -> MusicPage()
                         "Controls" -> ControlsPage()
                         "Calendar" -> CalendarPage()
@@ -91,11 +103,9 @@ fun AnibloomApp() {
                     }
                 }
                 Spacer(Modifier.weight(1f))
-                Dock(selected = page, onSelect = { page = it })
+                Dock(page) { page = it }
             }
 
-            // Punch-hole Dynamic Island. It remains independent of the page
-            // content and can later be moved into a system overlay service.
             Island(
                 expanded = islandExpanded,
                 onClick = { islandExpanded = !islandExpanded },
@@ -107,53 +117,27 @@ fun AnibloomApp() {
 
 @Composable
 private fun Island(expanded: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val width by animateDpAsState(
-        targetValue = if (expanded) 320.dp else 132.dp,
-        animationSpec = spring(dampingRatio = 0.72f, stiffness = 420f),
-        label = "islandWidth"
-    )
-    val height by animateDpAsState(
-        targetValue = if (expanded) 88.dp else 34.dp,
-        animationSpec = spring(dampingRatio = 0.72f, stiffness = 420f),
-        label = "islandHeight"
-    )
-
+    val width by animateDpAsState(if (expanded) 330.dp else 150.dp, spring(dampingRatio = .72f, stiffness = 420f), label = "islandWidth")
+    val height by animateDpAsState(if (expanded) 88.dp else 38.dp, spring(dampingRatio = .72f, stiffness = 420f), label = "islandHeight")
     Box(
-        modifier = modifier
-            .padding(top = 6.dp)
-            .width(width)
-            .height(height)
-            .clip(RoundedCornerShape(24.dp))
-            .background(Color.Black)
-            .clickable { onClick() }
-            .padding(horizontal = 12.dp),
+        modifier.padding(top = 2.dp).width(width).height(height)
+            .clip(RoundedCornerShape(24.dp)).background(Color.Black).clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
         if (expanded) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Box(
-                    Modifier
-                        .size(46.dp)
-                        .clip(RoundedCornerShape(13.dp))
-                        .background(Card2),
-                    contentAlignment = Alignment.Center
-                ) {
+            Row(Modifier.padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(46.dp).clip(RoundedCornerShape(13.dp)).background(Card2), Alignment.Center) {
                     Icon(Icons.Rounded.MusicNote, null, tint = Accent)
                 }
+                Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Now Playing", color = Accent, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    Text("Anibloom · Media controls", color = Muted, fontSize = 11.sp)
+                    Text("Anibloom Island", color = Accent, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("Tap for music controls", color = Muted, fontSize = 11.sp)
                 }
-                Text("▶", color = Accent, fontSize = 18.sp)
+                Text("×", color = Accent, fontSize = 22.sp)
             }
         } else {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(7.dp)
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 Box(Modifier.size(6.dp).clip(CircleShape).background(Accent))
                 Text("Anibloom", color = Accent, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
             }
@@ -162,79 +146,132 @@ private fun Island(expanded: Boolean, onClick: () -> Unit, modifier: Modifier = 
 }
 
 @Composable
-private fun HomePage() {
+private fun HomePage(onIsland: () -> Unit) {
+    val context = LocalContext.current
+    val battery = rememberBattery(context)
     Column(Modifier.fillMaxWidth()) {
         Text("Good evening", color = Muted, fontSize = 14.sp)
         Text("Your Android, alive.", color = Accent, fontSize = 28.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(22.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            InfoCard("Battery", "87%", Icons.Rounded.BatteryFull, Modifier.weight(1f))
-            InfoCard("Display", "Punch-hole", Icons.Rounded.Brightness6, Modifier.weight(1f))
+            ActionCard("Battery", "$battery%", Icons.Rounded.BatteryFull, Modifier.weight(1f)) { }
+            ActionCard("Display", "Punch-hole", Icons.Rounded.Brightness6, Modifier.weight(1f)) {
+                open(context, Settings.ACTION_DISPLAY_SETTINGS)
+            }
         }
         Spacer(Modifier.height(12.dp))
-        InfoCard("Today", "Focus · Pomodoro ready", Icons.Rounded.CalendarMonth, Modifier.fillMaxWidth())
+        ActionCard("Anibloom Island", "Tap to expand", Icons.Rounded.AutoAwesome, Modifier.fillMaxWidth(), onIsland)
     }
 }
 
 @Composable
 private fun MusicPage() {
+    val context = LocalContext.current
+    var playing by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Text("Music", color = Muted, fontSize = 14.sp)
         Spacer(Modifier.height(12.dp))
-        Box(Modifier.size(210.dp).clip(RoundedCornerShape(30.dp)).background(Card2), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(210.dp).clip(RoundedCornerShape(30.dp)).background(Card2), Alignment.Center) {
             Icon(Icons.Rounded.MusicNote, null, tint = Accent, modifier = Modifier.size(72.dp))
         }
-        Spacer(Modifier.height(18.dp))
-        Text("Nothing playing", color = Accent, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Text("Media controls will use Android MediaSession", color = Muted, fontSize = 12.sp)
+        Spacer(Modifier.height(16.dp))
+        Text("Android Media", color = Accent, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text("Control the active music player", color = Muted, fontSize = 12.sp)
+        Spacer(Modifier.height(20.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            BigButton("⏮") { mediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS) }
+            BigButton(if (playing) "⏸" else "▶") {
+                mediaKey(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+                playing = !playing
+            }
+            BigButton("⏭") { mediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT) }
+        }
     }
 }
 
 @Composable
 private fun ControlsPage() {
+    val context = LocalContext.current
+    var flash by remember { mutableStateOf(false) }
+    var bright by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth()) {
         Text("Command Center", color = Accent, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text("Android controls", color = Muted, fontSize = 12.sp)
         Spacer(Modifier.height(16.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Toggle("Wi-Fi", Icons.Rounded.Wifi, true, Modifier.weight(1f))
-            Toggle("Bluetooth", Icons.Rounded.Bluetooth, false, Modifier.weight(1f))
+            ActionTile("Wi-Fi", Icons.Rounded.Wifi, Modifier.weight(1f)) { open(context, Settings.Panel.ACTION_WIFI) }
+            ActionTile("Bluetooth", Icons.Rounded.Bluetooth, Modifier.weight(1f)) { open(context, Settings.ACTION_BLUETOOTH_SETTINGS) }
         }
         Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Toggle("Flash", Icons.Rounded.FlashOn, false, Modifier.weight(1f))
-            Toggle("Brightness", Icons.Rounded.Brightness6, true, Modifier.weight(1f))
+            ActionTile("Flashlight", Icons.Rounded.FlashOn, Modifier.weight(1f), flash) {
+                flash = !flash
+                torch(context, flash)
+            }
+            ActionTile("Brightness", Icons.Rounded.Brightness6, Modifier.weight(1f), bright) {
+                if (Settings.System.canWrite(context)) {
+                    bright = !bright
+                    Settings.System.putInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS, if (bright) 255 else 70)
+                } else {
+                    open(context, Settings.ACTION_MANAGE_WRITE_SETTINGS, "package:${context.packageName}")
+                }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            ActionTile("Do Not Disturb", Icons.Rounded.Notifications, Modifier.weight(1f)) { open(context, Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS) }
+            ActionTile("Volume", Icons.Rounded.Brightness6, Modifier.weight(1f)) { open(context, Settings.ACTION_SOUND_SETTINGS) }
         }
     }
 }
 
 @Composable
 private fun CalendarPage() {
+    var seconds by remember { mutableStateOf(1500) }
+    var running by remember { mutableStateOf(false) }
+    LaunchedEffect(running) {
+        while (running && seconds > 0) {
+            delay(1000)
+            seconds--
+        }
+        if (seconds == 0) running = false
+    }
     Column(Modifier.fillMaxWidth()) {
-        Text("Calendar", color = Accent, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text("Pomodoro", color = Accent, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text("Focus timer", color = Muted, fontSize = 12.sp)
         Spacer(Modifier.height(14.dp))
-        InfoCard("Pomodoro", "25:00 · Ready to focus", Icons.Rounded.CalendarMonth, Modifier.fillMaxWidth())
+        ActionCard("Focus", "%02d:%02d".format(seconds / 60, seconds % 60), Icons.Rounded.Timer, Modifier.fillMaxWidth()) { running = !running }
+        Spacer(Modifier.height(14.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            BigButton(if (running) "Pause" else "Start") { running = !running }
+            BigButton("Reset") { running = false; seconds = 1500 }
+        }
     }
 }
 
 @Composable
 private fun SettingsPage() {
+    val context = LocalContext.current
     Column(Modifier.fillMaxWidth()) {
         Text("Settings", color = Accent, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text("Configure Anibloom Android", color = Muted, fontSize = 12.sp)
         Spacer(Modifier.height(14.dp))
-        InfoCard("Island", "Punch-hole · size · animation", Icons.Rounded.MusicNote, Modifier.fillMaxWidth())
+        ActionCard("Display", "Punch-hole optimized", Icons.Rounded.AutoAwesome, Modifier.fillMaxWidth()) { open(context, Settings.ACTION_DISPLAY_SETTINGS) }
         Spacer(Modifier.height(10.dp))
-        InfoCard("Android permissions", "Overlay · notifications · media", Icons.Rounded.Settings, Modifier.fillMaxWidth())
+        ActionCard("Overlay", "Allow Anibloom over other apps", Icons.Rounded.AutoAwesome, Modifier.fillMaxWidth()) { open(context, Settings.ACTION_MANAGE_OVERLAY_PERMISSION, "package:${context.packageName}") }
+        Spacer(Modifier.height(10.dp))
+        ActionCard("Notifications", "Open Anibloom notification settings", Icons.Rounded.Notifications, Modifier.fillMaxWidth()) { open(context, Settings.ACTION_APP_NOTIFICATION_SETTINGS) }
+        Spacer(Modifier.height(10.dp))
+        ActionCard("App info", "Permissions and battery settings", Icons.Rounded.Settings, Modifier.fillMaxWidth()) { open(context, Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${context.packageName}") }
     }
 }
 
 @Composable
-private fun InfoCard(title: String, value: String, icon: ImageVector, modifier: Modifier) {
-    Row(modifier.clip(RoundedCornerShape(22.dp)).background(Card).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(42.dp).clip(CircleShape).background(Card2), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = Accent, modifier = Modifier.size(20.dp))
-        }
-        Spacer(Modifier.size(12.dp))
-        Column {
+private fun ActionCard(title: String, value: String, icon: ImageVector, modifier: Modifier, onClick: () -> Unit) {
+    Row(modifier.clip(RoundedCornerShape(22.dp)).background(Card).clickable { onClick() }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(42.dp).clip(CircleShape).background(Card2), Alignment.Center) { Icon(icon, null, tint = Accent, modifier = Modifier.size(20.dp)) }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
             Text(title, color = Muted, fontSize = 12.sp)
             Text(value, color = Accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         }
@@ -242,12 +279,19 @@ private fun InfoCard(title: String, value: String, icon: ImageVector, modifier: 
 }
 
 @Composable
-private fun Toggle(label: String, icon: ImageVector, enabled: Boolean, modifier: Modifier) {
-    Column(modifier.clip(RoundedCornerShape(22.dp)).background(if (enabled) Card2 else Card).padding(16.dp)) {
+private fun ActionTile(label: String, icon: ImageVector, modifier: Modifier, active: Boolean = false, onClick: () -> Unit) {
+    Column(modifier.clip(RoundedCornerShape(22.dp)).background(if (active) Card2 else Card).clickable { onClick() }.padding(16.dp)) {
         Icon(icon, null, tint = Accent, modifier = Modifier.size(22.dp))
         Spacer(Modifier.height(14.dp))
         Text(label, color = Accent, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-        Text(if (enabled) "On" else "Off", color = Muted, fontSize = 11.sp)
+        Text(if (active) "On" else "Tap", color = Muted, fontSize = 11.sp)
+    }
+}
+
+@Composable
+private fun BigButton(text: String, onClick: () -> Unit) {
+    Box(Modifier.clip(RoundedCornerShape(18.dp)).background(Card2).clickable { onClick() }.padding(horizontal = 22.dp, vertical = 14.dp), Alignment.Center) {
+        Text(text, color = Accent, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -260,27 +304,54 @@ private fun Dock(selected: String, onSelect: (String) -> Unit) {
         "Calendar" to Icons.Rounded.CalendarMonth,
         "Settings" to Icons.Rounded.Settings
     )
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .navigationBarsPadding()
-            .padding(vertical = 12.dp)
-            .clip(RoundedCornerShape(28.dp))
-            .background(Card)
-            .padding(8.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(vertical = 12.dp).clip(RoundedCornerShape(28.dp)).background(Card).padding(8.dp), Arrangement.SpaceEvenly, Alignment.CenterVertically) {
         items.forEach { (name, icon) ->
             val active = selected == name
-            Box(
-                Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(if (active) Card2 else Color.Transparent)
-                    .clickable { onSelect(name) },
-                contentAlignment = Alignment.Center
-            ) { Icon(icon, name, tint = if (active) Accent else Muted) }
+            Box(Modifier.size(48.dp).clip(CircleShape).background(if (active) Card2 else Color.Transparent).clickable { onSelect(name) }, Alignment.Center) {
+                Icon(icon, name, tint = if (active) Accent else Muted)
+            }
         }
     }
+}
+
+@Composable
+private fun rememberBattery(context: Context): Int {
+    var level by remember { mutableStateOf(0) }
+    DisposableEffect(context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(c: Context, intent: Intent) {
+                val value = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, 0)
+                val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, 100).coerceAtLeast(1)
+                level = (value * 100 / scale).coerceIn(0, 100)
+            }
+        }
+        val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+        context.registerReceiver(receiver, filter)
+        onDispose { context.unregisterReceiver(receiver) }
+    }
+    return level
+}
+
+private fun open(context: Context, action: String, data: String? = null) {
+    try {
+        val intent = Intent(action)
+        if (data != null) intent.data = android.net.Uri.parse(data)
+        context.startActivity(intent)
+    } catch (_: Exception) {
+        if (context is Activity) context.startActivity(Intent(Settings.ACTION_SETTINGS))
+    }
+}
+
+private fun mediaKey(context: Context, code: Int) {
+    val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, code))
+    audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, code))
+}
+
+private fun torch(context: Context, enabled: Boolean) {
+    try {
+        val manager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+        val id = manager.cameraIdList.firstOrNull { manager.getCameraCharacteristics(it).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true }
+        if (id != null) manager.setTorchMode(id, enabled)
+    } catch (_: Exception) { }
 }
